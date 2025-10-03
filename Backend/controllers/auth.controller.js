@@ -1,59 +1,67 @@
-import bcrypt from "bcryptjs"
-import User from "../models/user.model";
+import bcrypt from "bcryptjs";
+import User from "../models/user.model.js";
+import { generateTokenAndSetCookie } from "../lib/utils/generateToken.js";
 
+export const signUp = async (req, res) => {
+    try {
+        const { fullName, username, email, password } = req.body;
 
+        // Check for existing email
+        const existingEmail = await User.findOne({ email });
+        if (existingEmail) {
+            return res.status(401).json({
+                success: false,
+                message: "Email already exists",
+            });
+        }
 
-export const signUp = async(req , res)=>{
-    try{
-        const {fullName , username , email , password} = req.body;
-        const existingEmail = User.findOne({email});
-        if(existingEmail){
-            res.status(401).json({
+        // Check for existing username
+        const existingUser = await User.findOne({ username });
+        if (existingUser) {
+            return res.status(401).json({
+                success: false,
+                message: "User with this username already exists",
+            });
+        }
+        if(password.length < 6){
+            return res.status(401).json({
                 success:false , 
-                message:"Email already exists"
+                message:"Password must be greater than 6 characters long"
             })
         }
-        const existingUser = await User.findOne({username});
+        // Hash the password
+        const hashPassword = await bcrypt.hash(password, 10); // Add await here for bcrypt.hash
+        const newUser = await User({
+            fullName,
+            username,
+            password: hashPassword,
+            email,
+        });
 
-        if(existingUser){
-            res.status(401).json({
-                success:false , 
-                message:"User with this username already exists"
-            })
-        }
-        const hashPassword = bcrypt.hash(password , 10);
-        const newUser  = await User.create({
-            fullName, 
-            username , 
-            password:hashPassword,
-            email
-        })
+        if (newUser) {
+            generateTokenAndSetCookie(newUser._id, res);
+            await newUser.save(); // Note: This is redundant since User.create already saves the user
 
-        if(newUser){
-            generateTokenAndSetCookie(user._id , res);
-            await newUser.save();
-
-            res.status(201).json({
-                _id : newUser._id , 
-                fullName: newUser.fullName ,
-                username:newUser.username,
-                email:newUser.email,
-                followers:newUser.followers,
-                following:newUser.followings,
-                profileImage : newUser.profileImage , 
-                coverImage:newUser.coverImage , 
-            })
+            return res.status(201).json({
+                _id: newUser._id,
+                fullName: newUser.fullName,
+                username: newUser.username,
+                email: newUser.email,
+                followers: newUser.followers,
+                following: newUser.followings, // Note: 'followings' might be a typo; should it be 'following'?
+                profileImage: newUser.profileImage,
+                coverImage: newUser.coverImage,
+            });
+        } else {
+            return res.status(400).json({
+                success: false,
+                message: "Failed to create user",
+            });
         }
-        else{
-            res.status(400).json({
-                error:"Internal server error"
-            })
-        }
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: error.message,
+        });
     }
-    catch(error){
-        res.status(501).json({
-            success:false , 
-            message:"Internal server error"
-        })
-    }
-}
+};
