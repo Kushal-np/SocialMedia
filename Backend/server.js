@@ -9,5 +9,3 @@ app.use("/auth" , authRoutes) ;
 app.listen(PORT , ()=>{
     console.log(`Server running on port ${PORT}`)
 })
-
-// html css js react express node mongodb postgre zustand redux python svelte Go Java
