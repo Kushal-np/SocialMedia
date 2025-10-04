@@ -119,7 +119,7 @@ export const followUnfollowUser = async (req, res) => {
 
 export const updateUser = async(req , res)=>{
     try{
-        const {fullName , email , username , currentPassword , newPassword , bio , Link} = req.body;
+        const {fullName , email , username , currentPassword , newPassword , bio , link} = req.body;
         let {profileImage , coverImage} = req.body;
 
         const userId = req.user._id;
@@ -154,11 +154,33 @@ export const updateUser = async(req , res)=>{
         }
 
         if(profileImage){
+            const uploadResponse = await cloudinary.uploader.upload(profileImage)
+            profileImage = uploadResponse.secure_url ; 
+        }
+        if(coverImage){ 
+            const uploadResponse = await cloudinary.uploader.upload(coverImage);
+            coverImage = uploadResponse.secure_url;
+        }
 
-        }
-        if(coverImage){
-            
-        }
+
+        user.fullName = fullName || user.fullName ; 
+        user.email = email || user.email ; 
+        user.username = username || user.username ; 
+        user.bio = bio || user.bio ; 
+        user.link = link || user.link;
+        user.profileImage = profileImage || user.profileImage ; 
+        user.coverImage = coverImage || user.coverImage ; 
+
+
+        user = await user.save();
+
+
+        user.password = null ; 
+        return res.status(201).json({
+            success:true , 
+            message: "Updated successfully " , 
+            user 
+        })
     }
     catch(error){
 
