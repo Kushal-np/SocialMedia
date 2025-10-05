@@ -1,60 +1,64 @@
-import mongoose from "mongoose"
+import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema({
-    fullName :{
-        type:String,
-        requried:true
+    fullName: {
+        type: String,
+        required: true
     },
-    username:{
-        type: String , 
-        required:true , 
-    
+    username: {
+        type: String,
+        required: true,
+        unique: true
     },
-    email:{
-        type:String , 
-        required:true , 
-        unique:true , 
+    email: {
+        type: String,
+        required: true,
+        unique: true
     },
-    password:{
-        type:String, 
-        required:true , 
-        unique:true 
+    password: {
+        type: String,
+        required: true
     },
-    followers:[
+    followers: [
         {
-            type: mongoose.Schema.Types.ObjectId , 
-            unique:true,
-            ref:"User",
-            default:[],
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: []
         }
     ],
-    followings:[
+    followings: [
+        {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: []
+        }
+    ],
+    profileImage: {
+        type: String,
+        default: ""
+    },
+    coverImage: {
+        type: String,
+        default: ""
+    },
+    bio: {
+        type: String,
+        default: ""
+    },
+    link: {
+        type: String,
+        default: ""
+    },
+    likedPosts:[
         {
             type:mongoose.Schema.Types.ObjectId , 
-            ref:"User",
+            ref:"Post" , 
             default:[]
         }
-    ],
-    profileImage:{
-        type:String,
-        default:"",
-    },
-    coverImage:{
-        type:String,
-        default:"",
-    },
-    bio:{
-        type:String,
-        default:"",
-    },
-    link:{
-        type:String,
-        default:""
-    }
-},{
-    timestamps:true
-})
+    ]
+}, {
+    timestamps: true
+});
 
-
-const User = mongoose.model("User" , userSchema)
+const User = mongoose.model("User", userSchema);
 export default User;

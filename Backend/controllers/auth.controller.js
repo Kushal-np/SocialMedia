@@ -6,143 +6,93 @@ export const signUp = async (req, res) => {
     try {
         const { fullName, username, email, password } = req.body;
 
-        // Check for existing email
+        if (!fullName || !username || !email || !password) {
+            return res.status(400).json({ success: false, message: "All fields are required" });
+        }
+
+        if (password.length < 6) {
+            return res.status(400).json({ success: false, message: "Password must be at least 6 characters" });
+        }
+
         const existingEmail = await User.findOne({ email });
-        if (existingEmail) {
-            return res.status(401).json({
-                success: false,
-                message: "Email already exists",
-            });
-        }
+        if (existingEmail) return res.status(401).json({ success: false, message: "Email already exists" });
 
-        // Check for existing username
-        const existingUser = await User.findOne({ username });
-        if (existingUser) {
-            return res.status(401).json({
-                success: false,
-                message: "User with this username already exists",
-            });
-        }
-        if(password.length < 6){
-            return res.status(401).json({
-                success:false , 
-                message:"Password must be greater than 6 characters long"
-            })
-        }
-        // Hash the password
-        const hashPassword = await bcrypt.hash(password, 10); // Add await here for bcrypt.hash
-        const newUser = await User({
-            fullName,
-            username,
-            password: hashPassword,
-            email,
+        const existingUsername = await User.findOne({ username });
+        if (existingUsername) return res.status(401).json({ success: false, message: "Username already exists" });
+
+        const hashPassword = await bcrypt.hash(password, 10);
+
+        const newUser = new User({ fullName, username, email, password: hashPassword });
+        await newUser.save();
+
+        generateTokenAndSetCookie(newUser._id, res);
+
+        return res.status(201).json({
+            _id: newUser._id,
+            fullName: newUser.fullName,
+            username: newUser.username,
+            email: newUser.email,
+            followers: newUser.followers,
+            followings: newUser.followings,
+            profileImage: newUser.profileImage,
+            coverImage: newUser.coverImage
         });
 
-        if (newUser) {
-            generateTokenAndSetCookie(newUser._id, res);
-            await newUser.save(); // Note: This is redundant since User.create already saves the user
-
-            return res.status(201).json({
-                _id: newUser._id,
-                fullName: newUser.fullName,
-                username: newUser.username,
-                email: newUser.email,
-                followers: newUser.followers,
-                following: newUser.followings, // Note: 'followings' might be a typo; should it be 'following'?
-                profileImage: newUser.profileImage,
-                coverImage: newUser.coverImage,
-            });
-        } else {
-            return res.status(400).json({
-                success: false,
-                message: "Failed to create user",
-            });
-        }
     } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message,
-        });
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
 
+export const login = async (req, res) => {
+    try {
+        const { username, password } = req.body;
 
-export const login = async(req , res)=>{
-    try{
-        const {username , password} = req.body;
-        const user = await User.findOne({username});
-        const isPasswordValid = await bcrypt.compare(password , user?.password)
-        if(!user){
-            return res.status(401).json({
-                success:false , 
-                message:"Some error occured"
-            })
-            
-        }
-        if(!isPasswordValid){
-            return res.status(401).json({
-                success:false , 
-                message:"Some error occured"
-            })
+        if (!username || !password) {
+            return res.status(400).json({ success: false, message: "Username and password are required" });
         }
 
-        generateTokenAndSetCookie(user._id , res);
+        const user = await User.findOne({ username });
+        if (!user) {
+            return res.status(401).json({ success: false, message: "Invalid username or password" });
+        }
 
-        res.status(201).json({
-            _id:user._id , 
-            fullName : user.fullName , 
-            username : user.username , 
-            email:user.email,
-            password:user.password , 
-            followers : user.followers , 
-            followings: user.followings , 
-            profileImage : user.profileImage , 
-            coverImage : user.profileImage , 
-            
+        const isPasswordValid = await bcrypt.compare(password, user.password);
+        if (!isPasswordValid) {
+            return res.status(401).json({ success: false, message: "Invalid username or password" });
+        }
+
+        generateTokenAndSetCookie(user._id, res);
+
+        return res.status(200).json({
+            _id: user._id,
+            fullName: user.fullName,
+            username: user.username,
+            email: user.email,
+            followers: user.followers,
+            followings: user.followings,
+            profileImage: user.profileImage,
+            coverImage: user.coverImage
         });
-        
-    }
-    catch(error){
-        return res.status(500).json(
-            {
-                success:false , 
-                message:"Internal server error" , 
-                error
-            }
-        )
-    }
-}
 
-
-export const logout = async(req, res)=>{
-    try{
-        res.cookie("jwt","",{maxAge:0});
-        res.status(201).json({
-            success:true , 
-            message:"Logged Out Successfully"
-        })
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Internal server error", error: error.message });
     }
-    catch(error){
-        return res.status(500).json({
-            success:false , 
-            message:"Internal server error"
-        })
+};
+
+export const logout = async (req, res) => {
+    try {
+        res.cookie("jwt", "", { maxAge: 0 });
+        return res.status(200).json({ success: true, message: "Logged out successfully" });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Internal server error" });
     }
-}
+};
 
-
-export const getMe = async(req , res)=>{
-    try{
+export const getMe = async (req, res) => {
+    try {
         const user = await User.findById(req.user._id).select("-password");
-        res.status(201).json({
-            success:true , 
-            user 
-        })
+        return res.status(200).json({ success: true, user });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
     }
-    catch(error){
-        return res.status(500).json({
-            success:false , 
-            message: error.message
-        })
-    }
-}
+};
