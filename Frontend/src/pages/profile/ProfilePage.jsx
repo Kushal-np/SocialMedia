@@ -2,7 +2,6 @@ import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import Posts from "../../components/common/Posts";
-import ProfileHeaderSkeleton from "../../components/skeletons/ProfileHeaderSkeleton";
 import EditProfileModal from "./EditProfileModal";
 
 import { POSTS } from "../../utils/db/dummy";
@@ -51,7 +50,6 @@ const ProfilePage = () => {
 		<>
 			<div className='flex-[4_4_0]  border-r border-gray-700 min-h-screen '>
 				{/* HEADER */}
-				{isLoading && <ProfileHeaderSkeleton />}
 				{!isLoading && !user && <p className='text-center text-lg mt-4'>User not found</p>}
 				<div className='flex flex-col'>
 					{!isLoading && user && (

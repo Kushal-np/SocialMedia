@@ -6,6 +6,7 @@ import HomePage from './pages/Home/HomePage'
 import Sidebar from './components/common/Sidebar'
 import RightPanel from './components/common/RightPanel'
 import NotificationPage from './pages/Notification/NotificationPage'
+import ProfilePage from './pages/profile/ProfilePage'
 
 const App = () => {
   return (
@@ -16,6 +17,7 @@ const App = () => {
         <Route path="/signup" element={<SignUpPage/>}/>
         <Route path="/homepage" element={<HomePage />}/>
         <Route path="/notifications" element={<NotificationPage/>}/>
+        <Route path="/profile/:username" element={<ProfilePage/>} />
       </Routes>
       <RightPanel/>
     </div>
