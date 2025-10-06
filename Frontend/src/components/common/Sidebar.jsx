@@ -3,10 +3,43 @@ import XSvg from "../svgs/X";
 import { MdHomeFilled } from "react-icons/md";
 import { IoNotifications } from "react-icons/io5";
 import { FaUser } from "react-icons/fa";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { BiLogOut } from "react-icons/bi";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "react-hot-toast";
 
 const Sidebar = () => {
+	const queryClient = useQueryClient();
+	const navigate = useNavigate();
+
+	const { mutate } = useMutation({
+		mutationFn: async () => {
+			const res = await fetch("http://localhost:7000/auth/logout", {
+				method: "POST",
+				credentials: "include",
+			});
+
+			const data = await res.json();
+			if (!res.ok) {
+				throw new Error(data.error || "Something went wrong");
+			}
+
+			return data;
+		},
+		onSuccess: () => {
+			toast.success("Logout successful");
+			queryClient.setQueryData(["authUser"], null); // ✅ Clear cached user
+			localStorage.removeItem("user")
+			navigate("/login"); // ✅ Instantly redirect to login
+		},
+		onError: (error) => {
+			toast.error(error.message);
+		},
+	});
+
+
+	const {data:authUser} = useQuery({queryKey:["authUser"]}) 
+
 	const data = {
 		fullName: "John Doe",
 		username: "johndoe",
@@ -19,6 +52,7 @@ const Sidebar = () => {
 				<Link to='/' className='flex justify-center md:justify-start'>
 					<XSvg className='px-2 w-12 h-12 rounded-full fill-white hover:bg-stone-900' />
 				</Link>
+
 				<ul className='flex flex-col gap-3 mt-4'>
 					<li className='flex justify-center md:justify-start'>
 						<Link
@@ -29,6 +63,7 @@ const Sidebar = () => {
 							<span className='text-lg hidden md:block'>Home</span>
 						</Link>
 					</li>
+
 					<li className='flex justify-center md:justify-start'>
 						<Link
 							to='/notifications'
@@ -49,14 +84,15 @@ const Sidebar = () => {
 						</Link>
 					</li>
 				</ul>
+
 				{data && (
-					<Link
-						to={`/profile/${data.username}`}
-						className='mt-auto mb-10 flex gap-2 items-start transition-all duration-300 hover:bg-[#181818] py-2 px-4 rounded-full'
+					<div
+						onClick={() => mutate()}
+						className='mt-auto mb-10 flex gap-2 items-start transition-all duration-300 hover:bg-[#181818] py-2 px-4 rounded-full cursor-pointer'
 					>
 						<div className='avatar hidden md:inline-flex'>
 							<div className='w-8 rounded-full'>
-								<img src={data?.profileImg || "/avatar-placeholder.png"} />
+								<img src={data?.profileImg || "/avatar-placeholder.png"} alt='Profile' />
 							</div>
 						</div>
 						<div className='flex justify-between flex-1'>
@@ -64,12 +100,13 @@ const Sidebar = () => {
 								<p className='text-white font-bold text-sm w-20 truncate'>{data?.fullName}</p>
 								<p className='text-slate-500 text-sm'>@{data?.username}</p>
 							</div>
-							<BiLogOut className='w-5 h-5 cursor-pointer' />
+							<BiLogOut className='w-5 h-5 cursor-pointer text-white' />
 						</div>
-					</Link>
+					</div>
 				)}
 			</div>
 		</div>
 	);
 };
+
 export default Sidebar;
