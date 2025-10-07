@@ -1,8 +1,5 @@
-import { FaRegComment } from "react-icons/fa";
+import { FaRegComment, FaRegHeart, FaTrash, FaRegBookmark } from "react-icons/fa";
 import { BiRepost } from "react-icons/bi";
-import { FaRegHeart } from "react-icons/fa";
-import { FaRegBookmark } from "react-icons/fa6";
-import { FaTrash } from "react-icons/fa";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -11,12 +8,10 @@ import LoadingSpinner from "./LoadingSpinner";
 
 const Post = ({ post }) => {
   const [comment, setComment] = useState("");
+  const [showComments, setShowComments] = useState(false);
   const queryClient = useQueryClient();
-
-  // ✅ Get currently logged-in user from cache
   const authUser = queryClient.getQueryData(["authUser"]);
 
-  // Safe access to post owner
   const postOwner = post.user || {
     username: "unknown",
     fullName: "Unknown User",
@@ -24,195 +19,111 @@ const Post = ({ post }) => {
     _id: null,
   };
 
-  // ✅ Determine if this post belongs to the logged-in user
   const isMyPost = authUser && post.user && authUser._id === post.user._id;
+  const isLiked = post.likes && authUser && post.likes.some(like => like._id === authUser._id);
+  const formattedDate = new Date(post.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-  // ✅ Check if the logged-in user liked this post
-  const isLiked =
-    post.likes && authUser && post.likes.some((like) => like._id === authUser._id);
-
-  const formattedDate = new Date(post.createdAt).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
+  // ---------------- Comment Mutation ----------------
+  const { mutate: commentPost, isLoading: isCommenting } = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`http://localhost:7000/post/comment/${post._id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: comment }),
+        credentials: "include",
+      });
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : {};
+      if (!res.ok) throw new Error(data.error || "Something went wrong");
+      return data;
+    },
+    onSuccess: () => {
+      toast.success("Comment added!");
+      queryClient.invalidateQueries(["posts"]);
+      setComment("");
+    },
+    onError: (err) => toast.error(err.message),
   });
 
-  const isCommenting = true;
-
-  // ✅ Delete post mutation
+  // ---------------- Delete Post Mutation ----------------
   const { mutate: deletePost, isLoading: isDeleting } = useMutation({
     mutationFn: async () => {
       const res = await fetch(`http://localhost:7000/post/${post._id}`, {
         method: "DELETE",
         credentials: "include",
       });
-      const data = await res.json();
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : {};
       if (!res.ok) throw new Error(data.error || "Something went wrong");
       return data;
     },
     onSuccess: () => {
-      toast.success("Post deleted Successfully");
-      queryClient.invalidateQueries(["posts"]); // refresh posts
+      toast.success("Post deleted successfully!");
+      queryClient.invalidateQueries(["posts"]);
     },
-    onError: (err) => {
-      toast.error(err.message);
-    },
+    onError: (err) => toast.error(err.message),
   });
 
-  const {mutate:likePost , isPending:isLiking} = useMutation({
-    mutationFn:async() =>{
-      try{
-        const res = await fetch(`http://localhost:7000/post/like/${post._id}`,{
-          method:"POST" , 
-          credentials:"include"
-
-        });
-        const data= await await res.json();
-        if(!res.ok){
-          throw new Error(data.error || "Something went wrong");
-        } 
-        return data ; 
-      }
-      catch(error){
-        throw new Error(error);
-      }
+  // ---------------- Like Mutation ----------------
+  const { mutate: likePost, isLoading: isLiking } = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`http://localhost:7000/post/like/${post._id}`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : {};
+      if (!res.ok) throw new Error(data.error || "Something went wrong");
+      return data;
     },
-    onSuccess:() =>{
-      toast.success("Post liked successfully");
-      queryClient.invalidateQueries({queryKey:["posts"]});
-    },
-    onError:(error) =>{
-      toast.error(error.message);
-    }
-  })
+    onSuccess: () => queryClient.invalidateQueries(["posts"]),
+    onError: (err) => toast.error(err.message),
+  });
 
-  const handleDeletePost = () => {
-    deletePost();
-  };
-
-  const handlePostComment = (e) => {
-    e.preventDefault();
-  };
-
-  const handleLikePost = () => {
-    if(isLiking){
-      return ; 
-    }
-    likePost();
-  };
+  const handleDelete = () => deletePost();
+  const handleComment = (e) => { e.preventDefault(); if (!isCommenting) commentPost(); };
+  const handleLike = () => { if (!isLiking) likePost(); };
 
   return (
     <div className="flex gap-2 items-start p-4 border-b border-gray-700">
-      {/* Avatar */}
       <div className="avatar">
         <Link to={`/profile/${postOwner.username}`} className="w-8 rounded-full overflow-hidden">
           <img src={postOwner.profileImg} alt={`${postOwner.fullName}'s profile`} />
         </Link>
       </div>
 
-      {/* Post content */}
       <div className="flex flex-col flex-1">
+        {/* Header */}
         <div className="flex gap-2 items-center">
-          <Link to={`/profile/${postOwner.username}`} className="font-bold">
-            {postOwner.fullName}
-          </Link>
+          <Link to={`/profile/${postOwner.username}`} className="font-bold">{postOwner.fullName}</Link>
           <span className="text-gray-700 flex gap-1 text-sm">
             <Link to={`/profile/${postOwner.username}`}>@{postOwner.username}</Link>
             <span>·</span>
             <span>{formattedDate}</span>
           </span>
-
-          {/* Delete button if it's user's post */}
           {isMyPost && (
             <span className="flex justify-end flex-1">
               {!isDeleting ? (
-                <FaTrash className="cursor-pointer hover:text-red-500" onClick={handleDeletePost} />
-              ) : (
-                <LoadingSpinner size="sm" />
-              )}
+                <FaTrash className="cursor-pointer hover:text-red-500" onClick={handleDelete} />
+              ) : (<LoadingSpinner size="sm" />)}
             </span>
           )}
         </div>
 
+        {/* Content */}
         <div className="flex flex-col gap-3 overflow-hidden">
           <span>{post.text}</span>
-          {post.img && (
-            <img
-              src={post.img}
-              className="h-80 object-contain rounded-lg border border-gray-700"
-              alt="Post content"
-            />
-          )}
+          {post.img && <img src={post.img} className="h-80 object-contain rounded-lg border border-gray-700" alt="Post content" />}
         </div>
 
-        {/* Post actions */}
+        {/* Actions */}
         <div className="flex justify-between mt-3">
           <div className="flex gap-4 items-center w-2/3 justify-between">
-            {/* Comments */}
-            <div
-              className="flex gap-1 items-center cursor-pointer group"
-              onClick={() => document.getElementById(`comments_modal_${post._id}`).showModal()}
-            >
+            {/* Comment */}
+            <div className="flex gap-1 items-center cursor-pointer group" onClick={() => setShowComments(true)}>
               <FaRegComment className="w-4 h-4 text-slate-500 group-hover:text-sky-400" />
-              <span className="text-sm text-slate-500 group-hover:text-sky-400">
-                {post.comments.length}
-              </span>
+              <span className="text-sm text-slate-500 group-hover:text-sky-400">{post.comments.length}</span>
             </div>
-
-            {/* Comments modal */}
-            <dialog id={`comments_modal_${post._id}`} className="modal border-none outline-none">
-              <div className="modal-box rounded border border-gray-600">
-                <h3 className="font-bold text-lg mb-4">COMMENTS</h3>
-                <div className="flex flex-col gap-3 max-h-60 overflow-auto">
-                  {post.comments.length === 0 && (
-                    <p className="text-sm text-slate-500">
-                      No comments yet 🤔 Be the first one 😉
-                    </p>
-                  )}
-                  {post.comments.map((comment) => {
-                    const commentUser = comment.user || {
-                      fullName: "Unknown User",
-                      username: "unknown",
-                      profileImg: "/avatar-placeholder.png",
-                    };
-                    return (
-                      <div key={comment._id} className="flex gap-2 items-start">
-                        <div className="avatar">
-                          <div className="w-8 rounded-full">
-                            <img src={commentUser.profileImg} alt={`${commentUser.fullName}'s profile`} />
-                          </div>
-                        </div>
-                        <div className="flex flex-col">
-                          <div className="flex items-center gap-1">
-                            <span className="font-bold">{commentUser.fullName}</span>
-                            <span className="text-gray-700 text-sm">@{commentUser.username}</span>
-                          </div>
-                          <div className="text-sm">{comment.text}</div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Add comment */}
-                <form
-                  className="flex gap-2 items-center mt-4 border-t border-gray-600 pt-2"
-                  onSubmit={handlePostComment}
-                >
-                  <textarea
-                    className="textarea w-full p-1 rounded text-md resize-none border focus:outline-none border-gray-800"
-                    placeholder="Add a comment..."
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                  />
-                  <button className="btn btn-primary rounded-full btn-sm text-white px-4">
-                    {isCommenting ? (<LoadingSpinner size="md"/>) : ("Post")}
-                  </button>
-                </form>
-              </div>
-              <form method="dialog" className="modal-backdrop">
-                <button className="outline-none">close</button>
-              </form>
-            </dialog>
 
             {/* Repost */}
             <div className="flex gap-1 items-center group cursor-pointer">
@@ -221,10 +132,8 @@ const Post = ({ post }) => {
             </div>
 
             {/* Like */}
-            <div className="flex gap-1 items-center group cursor-pointer" onClick={handleLikePost}>
-              <FaRegHeart
-                className={`w-4 h-4 cursor-pointer ${isLiked ? "text-pink-500" : "text-slate-500"} group-hover:text-pink-500`}
-              />
+            <div className="flex gap-1 items-center group cursor-pointer" onClick={handleLike}>
+              <FaRegHeart className={`w-4 h-4 cursor-pointer ${isLiked ? "text-pink-500" : "text-slate-500"} group-hover:text-pink-500`} />
               <span className={`text-sm ${isLiked ? "text-pink-500" : "text-slate-500"} group-hover:text-pink-500`}>
                 {post.likes.length}
               </span>
@@ -236,6 +145,38 @@ const Post = ({ post }) => {
             <FaRegBookmark className="w-4 h-4 text-slate-500 cursor-pointer" />
           </div>
         </div>
+
+        {/* Comments Modal */}
+        {showComments && (
+          <dialog open className="modal border-none outline-none">
+            <div className="modal-box rounded border border-gray-600">
+              <h3 className="font-bold text-lg mb-4">COMMENTS</h3>
+              <div className="flex flex-col gap-3 max-h-60 overflow-auto">
+                {post.comments.length === 0 && <p className="text-sm text-slate-500">No comments yet 🤔</p>}
+                {post.comments.map(c => {
+                  const user = c.user || { fullName: "Unknown", username: "unknown", profileImg: "/avatar-placeholder.png" };
+                  return (
+                    <div key={c._id} className="flex gap-2 items-start">
+                      <div className="avatar"><img src={user.profileImg} className="w-8 rounded-full" /></div>
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-1">
+                          <span className="font-bold">{user.fullName}</span>
+                          <span className="text-gray-700 text-sm">@{user.username}</span>
+                        </div>
+                        <div className="text-sm">{c.text}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <form className="flex gap-2 items-center mt-4 border-t border-gray-600 pt-2" onSubmit={handleComment}>
+                <textarea className="textarea w-full p-1 rounded text-md resize-none border focus:outline-none border-gray-800" placeholder="Add a comment..." value={comment} onChange={e => setComment(e.target.value)} />
+                <button className="btn btn-primary rounded-full btn-sm text-white px-4">{isCommenting ? <LoadingSpinner size="md"/> : "Post"}</button>
+              </form>
+              <button className="mt-2 btn btn-sm" onClick={() => setShowComments(false)}>Close</button>
+            </div>
+          </dialog>
+        )}
       </div>
     </div>
   );

@@ -3,8 +3,22 @@ import Post from "./Post";
 import { useQuery } from "@tanstack/react-query";
 import { Navigate } from "react-router-dom";
 
-const Posts = ({ feedType }) => {
-  const getPostEndPoint = (feedType) => {
+const Posts = ({ feedType, posts: initialPosts, username }) => {
+  // If posts are passed via props (like on profile page), render them directly
+  if (initialPosts) {
+    if (initialPosts.length === 0)
+      return <p className="text-center my-4">No posts yet.</p>;
+    return (
+      <div>
+        {initialPosts.map((post) => (
+          <Post key={post._id} post={post} />
+        ))}
+      </div>
+    );
+  }
+
+  // Otherwise fetch posts dynamically for feed pages
+  const getPostEndPoint = () => {
     switch (feedType) {
       case "forYou":
         return "http://localhost:7000/post/AllPosts";
@@ -15,23 +29,15 @@ const Posts = ({ feedType }) => {
     }
   };
 
-  const POST_ENDPOINT = getPostEndPoint(feedType);
+  const POST_ENDPOINT = getPostEndPoint();
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["posts", feedType],
     queryFn: async () => {
-      try {
-        const res = await fetch(POST_ENDPOINT, {
-          credentials: "include",
-        });
-        if (res.status === 401) {
-          throw new Error("Unauthorized");
-        }
-        const result = await res.json();
-        return result.posts || [];
-      } catch (error) {
-        throw error;
-      }
+      const res = await fetch(POST_ENDPOINT, { credentials: "include" });
+      if (res.status === 401) throw new Error("Unauthorized");
+      const result = await res.json();
+      return result.posts || [];
     },
     retry: 1,
   });
@@ -49,7 +55,11 @@ const Posts = ({ feedType }) => {
   if (isError) {
     console.error("Error fetching posts:", error.message);
     if (error.message === "Unauthorized") {
-      return <p className="text-center my-4">Please log in to view posts from users you follow.</p>;
+      return (
+        <p className="text-center my-4">
+          Please log in to view posts from users you follow.
+        </p>
+      );
     }
     return <Navigate to="/login" />;
   }

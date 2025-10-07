@@ -12,17 +12,18 @@ const Sidebar = () => {
   const navigate = useNavigate();
 
   // ✅ Fetch current user from server or cache
-  const { data: authUser } = useQuery({
+  const { data: authUser, isLoading } = useQuery({
     queryKey: ["authUser"],
     queryFn: async () => {
-      const res = await fetch("http://localhost:7000/auth/me", {
-        credentials: "include", // ensures cookies are sent
+      // ⚠️ FIXED: Changed to match ProfilePage endpoint
+      const res = await fetch("http://localhost:7000/api/auth/me", {
+        credentials: "include",
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to fetch user");
       return data;
     },
-    initialData: () => queryClient.getQueryData(["authUser"]), // use cache if available
+    initialData: () => queryClient.getQueryData(["authUser"]),
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
 
@@ -39,13 +40,21 @@ const Sidebar = () => {
     },
     onSuccess: () => {
       toast.success("Logout successful");
-      queryClient.setQueryData(["authUser"], null); // clear cached user
-      navigate("/login"); // redirect to login
+      queryClient.setQueryData(["authUser"], null);
+      navigate("/login");
     },
     onError: (error) => {
       toast.error(error.message);
     },
   });
+
+  // ✅ Handle profile link click safely
+  const handleProfileClick = (e) => {
+    if (!authUser?.username) {
+      e.preventDefault();
+      toast.error("Unable to load profile. Please refresh the page.");
+    }
+  };
 
   return (
     <div className="md:flex-[2_2_0] w-18 max-w-52">
@@ -76,13 +85,26 @@ const Sidebar = () => {
           </li>
 
           <li className="flex justify-center md:justify-start">
-            <Link
-              to={`/profile/${authUser?.username}`}
-              className="flex gap-3 items-center hover:bg-stone-900 transition-all rounded-full duration-300 py-2 pl-2 pr-4 max-w-fit cursor-pointer"
-            >
-              <FaUser className="w-6 h-6" />
-              <span className="text-lg hidden md:block">Profile</span>
-            </Link>
+            {/* ✅ FIXED: Only render Link when username exists, otherwise show disabled button */}
+            {authUser?.username ? (
+              <Link
+                to={`/profile/${authUser.username}`}
+                className="flex gap-3 items-center hover:bg-stone-900 transition-all rounded-full duration-300 py-2 pl-2 pr-4 max-w-fit cursor-pointer"
+              >
+                <FaUser className="w-6 h-6" />
+                <span className="text-lg hidden md:block">Profile</span>
+              </Link>
+            ) : (
+              <div
+                onClick={handleProfileClick}
+                className="flex gap-3 items-center opacity-50 cursor-not-allowed rounded-full py-2 pl-2 pr-4 max-w-fit"
+              >
+                <FaUser className="w-6 h-6" />
+                <span className="text-lg hidden md:block">
+                  {isLoading ? "Loading..." : "Profile"}
+                </span>
+              </div>
+            )}
           </li>
         </ul>
 
@@ -91,19 +113,7 @@ const Sidebar = () => {
             onClick={() => logout()}
             className="mt-auto mb-10 flex gap-2 items-start transition-all duration-300 hover:bg-[#181818] py-2 px-4 rounded-full cursor-pointer"
           >
-            <div className="avatar hidden md:inline-flex">
-              <div className="w-8 rounded-full">
-                <img
-                  src={authUser?.profileImg || "/avatar-placeholder.png"}
-                  alt="Profile"
-                />
-              </div>
-            </div>
-            <div className="flex justify-between flex-1">
-              <div className="hidden md:block">
-                <p className="text-white font-bold text-sm w-20 truncate">{authUser?.fullName}</p>
-                <p className="text-slate-500 text-sm">@{authUser?.username}</p>
-              </div>
+            <div className="flex justify-between">
               <BiLogOut className="w-5 h-5 cursor-pointer text-white" />
             </div>
           </div>
