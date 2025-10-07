@@ -1,73 +1,96 @@
 import Notification from "../models/notification.model.js";
 import Post from "../models/post.model.js";
 import User from "../models/user.model.js";
+import multer from "multer";
+import path from "path";
+import cloudinary from "../server.js";
+
+
+export const upload = multer({
+  storage: multer.memoryStorage(), // store file in memory
+  limits: { fileSize: 2 * 1024 * 1024 }, // max 2MB
+});
+
 
 // CREATE POST
 export const createPost = async (req, res) => {
-    try {
-        let { text, img } = req.body;
-        const userId = req.user._id; // use _id, not id.toString()
+  try {
+    const { text } = req.body;
+    const userId = req.user._id;
 
-        const user = await User.findById(userId);
-        if (!user) {
-            return res.status(404).json({ success: false, message: "User not found" });
-        }
-
-        if (!text && !img) {
-            return res.status(400).json({ success: false, message: "Post must have text or image" });
-        }
-
-        if (img) {
-            const uploadResponse = await cloudinary.uploader.upload(img);
-            img = uploadResponse.secure_url;
-        }
-
-        const newPost = new Post({
-            user: req.user._id, 
-            text,
-            img
-        });
-
-        await newPost.save();
-
-        // Populate the user field before sending response
-        const populatedPost = await newPost.populate("user");
-
-        res.status(201).json({ success: true, post: populatedPost });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
     }
+
+    if (!text && !req.file) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Post must have text or image" });
+    }
+
+    let imgUrl = null;
+
+    if (req.file) {
+      // Upload image to Cloudinary
+      imgUrl = await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          { resource_type: "image", folder: "posts" },
+          (error, result) => {
+            if (error) return reject(error);
+            resolve(result.secure_url);
+          }
+        );
+        uploadStream.end(req.file.buffer);
+      });
+    }
+
+    const newPost = new Post({
+      user: user._id,
+      text,
+      img: imgUrl,
+    });
+
+    await newPost.save();
+    const populatedPost = await newPost.populate("user", "-password");
+
+    res.status(201).json({ success: true, post: populatedPost });
+  } catch (error) {
+    console.error("Error creating post:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
 };
+
+
 
 // DELETE POST
+
+// DELETE /post/:id
 export const deletePost = async (req, res) => {
-    try {
-        const post = await Post.findById(req.params.id);
+  try {
+    const postId = req.params.id;
 
-        if (!post) return res.status(404).json({ success: false, message: "Post not found" });
-
-        if (post.user.toString() !== req.user._id.toString()) {
-            return res.status(401).json({ success: false, message: "Not authorized to delete this post" });
-        }
-
-        if (post.img) {
-            try {
-                const parts = post.img.split("/");
-                const uploadIndex = parts.findIndex(p => p === "upload");
-                const publicId = parts.slice(uploadIndex + 1).join("/").split(".")[0];
-                await cloudinary.uploader.destroy(publicId);
-            } catch (err) {
-                console.error("Cloudinary deletion error:", err.message);
-            }
-        }
-
-        await post.remove();
-
-        res.status(200).json({ success: true, message: "Post deleted successfully" });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+    // 1️⃣ Find the post
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res.status(404).json({ success: false, error: "Post not found" });
     }
+
+    // 2️⃣ Only allow owner to delete
+    if (req.user._id.toString() !== post.user.toString()) {
+      return res.status(403).json({ success: false, error: "Not authorized to delete this post" });
+    }
+
+    // 3️⃣ Delete the post
+    await post.deleteOne();
+
+    return res.status(200).json({ success: true, message: "Post deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting post:", error);
+    return res.status(500).json({ success: false, error: "Internal server error" });
+  }
 };
+
 
 // COMMENT ON POST
 export const commentOnPost = async (req, res) => {
@@ -210,37 +233,31 @@ export const getLikedPosts = async (req, res) => {
 };
 
 
-export const getFollowingPosts = async(req , res)=>{
-    try{
-        const userId = req.user._id;
-        const user = await User.findById(userId);
-        if(!user){
-            return res.status(404).json({
-                success:false , 
-                message:"User not found"
-            })
-        }
-        const following = user.followings ; 
-        const feedPosts = await Post.find({user : {$in : following}})
-        .sort({createdAt:-1})
-        .populate({
-            path:"user" , 
-            select:"-password" , 
-        })
-        .populate({
-            path:"comments.user" , 
-            select:"-password",
-        });
-        res.status(200).json(feedPosts)
+export const getFollowingPosts = async (req, res) => {
+  try {
+    // ✅ Ensure middleware attached
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
     }
-    catch(error){
-        console.log("Error in getFollowingPosts controller" , error)
-        res.status(500).json({
-            error:"internal server error"
-        })
-    }
-}
 
+    const userId = req.user._id;
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+    const following = user.followings || [];
+
+    const feedPosts = await Post.find({ user: { $in: following } })
+      .sort({ createdAt: -1 })
+      .populate({ path: "user", select: "-password" })
+      .populate({ path: "comments.user", select: "-password" });
+
+    res.status(200).json(feedPosts);
+  } catch (error) {
+    console.log("Error in getFollowingPosts controller:", error);
+    res.status(500).json({ success: false, error: "Internal server error" });
+  }
+};
 
 
 export const getUserPosts = async(req , res)=>{

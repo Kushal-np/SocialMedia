@@ -1,11 +1,11 @@
 import express from "express"
 import { protectedRoute } from "../Middleware/protectedRoute.js";
-import { commentOnPost, createPost, deletePost, getAllPost, getFollowingPosts, getLikedPosts, getUserPosts, likeUnlikePost } from "../controllers/post.controller.js";
+import { commentOnPost, createPost, deletePost, getAllPost, getFollowingPosts, getLikedPosts, getUserPosts, likeUnlikePost, upload } from "../controllers/post.controller.js";
 const router = express.Router();
 
 
-router.post("/create" , protectedRoute  , createPost);
-router.get("/following" , protectedRoute , getFollowingPosts);
+router.post("/create", protectedRoute, upload.single("img"), createPost);
+router.get("/following" , protectedRoute , getFollowingPosts)
 router.get("/likes/:id" , protectedRoute , getLikedPosts)
 router.post("/like/:id" , protectedRoute , likeUnlikePost);
 router.post("/comment/:id" , protectedRoute , commentOnPost) ; 

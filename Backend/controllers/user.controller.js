@@ -1,6 +1,6 @@
 import Notification from "../models/notification.model.js";
 import User from "../models/user.model.js";
-
+import mongoose from "mongoose"
 export const getUserProfile = async (req, res) => {
   try {
     const { username } = req.params;
@@ -21,32 +21,65 @@ export const getUserProfile = async (req, res) => {
   }
 };
 
+
+
 export const getSuggestedUsers = async (req, res) => {
   try {
-    const userId = req.user._id;
-    const userFollowedByMe = await User.findById(userId).select("following");
+    console.log("✅ getSuggestedUsers hit");
+
+    const userId = req.user?._id;
+    console.log("userId:", userId);
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized — user not found in token" });
+    }
+
+    const user = await User.findById(userId).select("followings");
+    console.log("user:", user);
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    const followingIds = user.followings.map((id) => id.toString());
+    console.log("followingIds:", followingIds);
+
     const users = await User.aggregate([
       {
         $match: {
-          _id: { $ne: userId },
+          _id: { $ne: new mongoose.Types.ObjectId(userId) },
         },
       },
       {
         $sample: { size: 10 },
       },
+      {
+        $project: {
+          _id: 1,
+          fullName: 1,
+          username: 1,
+          profileImg: 1,
+        },
+      },
     ]);
 
-    const filteredUseres = users.filter(
-      (user) => !userFollowedByMe.followings.includes(user.id)
-    );
-    const suggestedUsers = filteredUseres.slice(0, 4);
-    suggestedUsers.forEach((user) => (user.password = null));
+    console.log("random users:", users.length);
 
-    res.status(200).json({
+    const filteredUsers = users.filter(
+      (user) => !followingIds.includes(user._id.toString())
+    );
+
+    console.log("filtered:", filteredUsers.length);
+
+    const suggestedUsers = filteredUsers.slice(0, 4);
+
+    return res.status(200).json({
+      success: true,
       suggestedUsers,
     });
   } catch (error) {
-    res.status(500).json({
+    console.error("❌ getSuggestedUsers error:", error);
+    return res.status(500).json({
       success: false,
       message: "Internal server error",
       error: error.message,
