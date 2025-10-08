@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import XSvg from "../../../components/svgs/X";
 import { MdOutlineMail, MdPassword, MdDriveFileRenameOutline } from "react-icons/md";
@@ -13,7 +13,7 @@ const SignUpPage = () => {
     fullName: "",
     password: "",
   });
-
+  const navigate = useNavigate()
   const { mutate, isError, isPending } = useMutation({
     mutationFn: async ({ email, username, fullName, password }) => {
       const res = await fetch("http://localhost:7000/auth/signup", {
@@ -37,6 +37,8 @@ const SignUpPage = () => {
     onSuccess: (data) => {
       toast.success("Account created successfully!");
       console.log("Signup success:", data);
+      navigate("/login")
+      
     },
     onError: (error) => {
       toast.error(error.message || "Signup Failed");
